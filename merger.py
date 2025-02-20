@@ -6,19 +6,44 @@ import shutil
 import time
 import stat
 
+
+def download_with_progress(url, filename):
+    """Download a file with a simple progress display."""
+    response = urllib.request.urlopen(url)
+    total_size = int(response.getheader('Content-Length').strip())
+    block_size = 1024  # 1 KiB
+    downloaded_size = 0
+
+    with open(filename, 'wb') as f:
+        while True:
+            buffer = response.read(block_size)
+            if not buffer:
+                break
+            f.write(buffer)
+            downloaded_size += len(buffer)
+            percent = (downloaded_size / total_size) * 100
+            print(f"\rDownloading {filename}: {percent:.2f}%", end='')
+
+    print()  # Newline after the download is complete
+    if downloaded_size != total_size:
+        raise Exception("Error: Download incomplete")
+
+
 def download_ffmpeg():
-    """Download and extract FFmpeg version 7.1 temporarily."""
+    """Check if FFmpeg exists; if not, download and extract it."""
+    extract_path = "ffmpeg"
+    if os.path.exists(extract_path):
+        print("FFmpeg is already downloaded. Skipping download.")
+        version_folder = next(os.walk(extract_path))[1][0]
+        ffmpeg_executable = os.path.join(extract_path, version_folder, 'bin', 'ffmpeg.exe')
+        return ffmpeg_executable, extract_path
+
+    print("FFmpeg not found. Downloading now...")
     url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     zip_path = "ffmpeg.zip"
-    extract_path = "ffmpeg"
 
-    # Remove existing FFmpeg directory if it exists
-    if os.path.exists(extract_path):
-        shutil.rmtree(extract_path)
-
-    # Download the FFmpeg zip file
-    print("Downloading FFmpeg...")
-    urllib.request.urlretrieve(url, zip_path)
+    # Download FFmpeg zip with progress
+    download_with_progress(url, zip_path)
 
     # Extract the zip file
     print("Extracting FFmpeg...")
@@ -34,6 +59,7 @@ def download_ffmpeg():
 
     return ffmpeg_executable, extract_path
 
+
 def get_video_files(directory, extension='.mp4'):
     """Get a list of video file paths with the specified extension in the given directory."""
     try:
@@ -45,16 +71,18 @@ def get_video_files(directory, extension='.mp4'):
         print(f"❌❌❌ Unexpected error: {str(e)}")
         return []
 
+
 def create_input_file(video_files, input_filename='input.txt'):
     """Create a text file containing a list of input video files for FFmpeg."""
     try:
-        with open(input_filename, 'w') as input_file:
+        with open(input_filename, 'w', encoding='utf-8') as input_file:
             for video_file in video_files:
                 input_file.write(f"file '{video_file}'\n")
     except FileNotFoundError as fnf_error:
         print(f"❌❌❌ File not found error: {str(fnf_error)}")
     except Exception as e:
         print(f"❌❌❌ Unexpected error: {str(e)}")
+
 
 def concatenate_videos(ffmpeg_path, input_filename='input.txt', output_filename='final.mp4'):
     """Concatenate video clips using FFmpeg with progress display and ignoring warnings."""
@@ -84,10 +112,6 @@ def concatenate_videos(ffmpeg_path, input_filename='input.txt', output_filename=
         return False
     return True
 
-def remove_readonly(func, path, excinfo):
-    """Clear the readonly bit and reattempt the removal."""
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 def main():
     downloads_dir = 'downloads'
@@ -99,9 +123,6 @@ def main():
         overwrite = input(f"'{output_filename}' already exists. Do you want to overwrite it? (Y/N): ").strip().lower()
         if overwrite != 'y':
             print("Operation cancelled.")
-            # Clean up FFmpeg files if the user chooses not to overwrite
-            if os.path.exists('ffmpeg'):
-                shutil.rmtree('ffmpeg', onerror=remove_readonly)
             return
 
     # Get the list of video files
@@ -111,10 +132,16 @@ def main():
         print("No video files found in the 'downloads' directory.")
         return
 
+    # Ask the user if they want to merge the videos
+    merge_videos = input("Do you want to merge all videos in the 'downloads' folder? (Y/N): ").strip().lower()
+    if merge_videos != 'y':
+        print("Merging operation cancelled by the user.")
+        return
+
     # Create the input file for FFmpeg
     create_input_file(video_files, input_filename)
 
-    # Download and extract FFmpeg
+    # Download and extract FFmpeg if necessary
     ffmpeg_path, ffmpeg_dir = download_ffmpeg()
 
     # Concatenate the videos
@@ -128,22 +155,9 @@ def main():
             print(f"❌❌❌ Error removing temporary input file: {str(e)}")
 
         print(f"Merged all videos into '{output_filename}'.")
-
-        # Close FFmpeg process and wait before deleting
-        print("Waiting for 2 seconds before cleaning up FFmpeg files...")
-        time.sleep(2)
-        try:
-            shutil.rmtree(ffmpeg_dir, onerror=remove_readonly)
-        except Exception as e:
-            print(f"❌❌❌ Failed to delete FFmpeg directory: {str(e)}")
     else:
         print("❌❌❌ Failed to merge videos.")
-        # Clean up FFmpeg files if the merge fails
-        if os.path.exists(ffmpeg_dir):
-            try:
-                shutil.rmtree(ffmpeg_dir, onerror=remove_readonly)
-            except Exception as e:
-                print(f"❌❌❌ Failed to delete FFmpeg directory: {str(e)}")
+
 
 if __name__ == "__main__":
     main()
