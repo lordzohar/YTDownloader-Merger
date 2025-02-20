@@ -3,9 +3,10 @@ YTDownloader-Merger is a Python script that allows you to download videos from a
 
 ## Features
 
-- Download all videos from a YouTube playlist.
-- Save videos in a specified directory.
-- Merge downloaded videos into a single file (optional).
+- 📥 Download all videos from a YouTube playlist.
+- 📂 Save videos in a specified directory.
+- 🎬 Merge downloaded videos into a single file.
+- 🔄 Automatically handle FFmpeg updates.
 
 ## Requirements
 
